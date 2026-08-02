@@ -1,0 +1,17 @@
+# R and RStudio
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Quarto
+/.quarto/
+_quarto.yml
+*.html
+*_files/
+
+# OS files
+.DS_Store
+
+# Data?
+*.json

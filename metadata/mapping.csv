@@ -1,0 +1,53 @@
+Collar,Plot,Treatment
+1,Control,Control
+2,Control,Disturbance
+3,Control,1 µm
+4,Control,45 µm
+5,Control,Control
+6,Control,Disturbance
+7,Control,1 µm
+8,Control,45 µm
+9,Control,Control
+10,Control,Disturbance
+11,Control,1 µm
+12,Control,45 µm
+13,Control,Control
+14,Control,Disturbance
+15,Control,1 µm
+16,Control,45 µm
+17,Control,Control
+18,Control,Disturbance
+19,Saltwater,1 µm
+20,Saltwater,45 µm
+21,Saltwater,Control
+22,Saltwater,Disturbance
+23,Saltwater,1 µm
+24,Saltwater,45 µm
+25,Saltwater,Control
+26,Saltwater,Disturbance
+27,Saltwater,1 µm
+28,Saltwater,45 µm
+29,Saltwater,Control
+30,Saltwater,Disturbance
+31,Saltwater,1 µm
+32,Saltwater,45 µm
+33,Freshwater,Control
+34,Freshwater,Disturbance
+35,Freshwater,1 µm
+36,Freshwater,45 µm
+37,Freshwater,Control
+38,Freshwater,Disturbance
+39,Freshwater,1 µm
+40,Freshwater,45 µm
+41,Freshwater,Control
+42,Freshwater,Disturbance
+43,Freshwater,1 µm
+44,Freshwater,45 µm
+45,Freshwater,Control
+46,Freshwater,Disturbance
+47,Freshwater,1 µm
+48,Freshwater,45 µm
+49,Control,Control
+50,Saltwater,Control
+51,Saltwater,Control
+52,Saltwater,Control

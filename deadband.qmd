@@ -1,0 +1,58 @@
+---
+title: "deadband"
+code-fold: true
+toc: true
+---
+
+```{r setup}
+#| output: false
+
+library(lubridate)
+library(tidyr)
+library(fluxfinder)
+options(fluxfinder.quiet = TRUE)
+library(dplyr)
+library(broom)
+library(ggplot2)
+set_theme(theme_bw())
+library(readr)
+```
+
+## Data prep
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+```{r data-prep}
+
+# Find the data files
+files <- list.files(pattern = "json$", 
+                    path = "data/",
+                    full.names = TRUE) 
+message("Found ", length(files), " data files")
+
+dat_list <- list()
+for(f in files) {
+  message("\tReading ", f)
+  ffi_read_LIsmartchamber(f) |> 
+    as_tibble() |> 
+    select(Collar = label, RepNum, TIMESTAMP, 
+           co2, ch4, DeadBand,
+           soilp_c, soilp_m, soilp_t) |> 
+    mutate(Collar = as.integer(Collar),
+           AMPM = if_else(am(TIMESTAMP), "AM", "PM")) ->
+    dat_list[[f]]
+}
+# Join everything together
+dat <- bind_rows(dat_list)
+message("Read ", nrow(dat), " rows")
+
+# Metadata
+METADATA_FILE <- "metadata/mapping.csv"
+message("Reading ", METADATA_FILE)
+md <- read_csv(METADATA_FILE, col_types = "icc")
+dat |> 
+  left_join(md, by = "Collar") ->
+  dat
+```
+
+## Dead band and measurement length analysis
