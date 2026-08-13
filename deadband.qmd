@@ -18,11 +18,9 @@ set_theme(theme_bw())
 library(readr)
 ```
 
-## Data prep
+## 2026 soil respiration – data prep
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-```{r data-prep}
+```{r rs2026-data-prep}
 
 # Find the data files
 files <- list.files(pattern = "json$", 
@@ -53,6 +51,66 @@ md <- read_csv(METADATA_FILE, col_types = "icc")
 dat |> 
   left_join(md, by = "Collar") ->
   dat
+
+# Compute 'Group' and "time_s' columns
+dat$Group <- dat |> group_by(yday(TIMESTAMP), Collar, RepNum, AMPM) |> group_indices()
+
+dat |> 
+  group_by(Group) |> 
+  mutate(time_s = as.numeric(TIMESTAMP - min(TIMESTAMP))) |> 
+  ungroup() ->
+  dat
+
 ```
 
 ## Dead band and measurement length analysis
+
+```{r dm-ml-analysis}
+dbs <- c(0, 5, 10, 15, 20)
+mls <- c(30, 40, 50, 60)
+
+RESULTS_FILE <- "results.RDS"
+ if(file.exists(RESULTS_FILE)) {
+   warning("Loading ", RESULTS_FILE)
+   results <- readRDS(RESULTS_FILE)
+ } else {
+   results <- list()
+   for(g in sort(unique(dat$Group))) {
+     if(g %% 100 == 0) message(g)
+     for(db in dbs) {
+       for(ml in mls) {
+         dat |> 
+           # isolate this group and drop data in the dead band
+           filter(Group == g, time_s > db) |> 
+           # drop data beyond the measurement length
+           slice_head(n = ml) ->
+           this_dat
+         
+         suppressWarnings({
+           co2_results <- fluxfinder::ffi_fit_models(this_dat$time_s, this_dat$co2)
+           co2_results$Gas <- "CO2"
+           ch4_results <- fluxfinder::ffi_fit_models(this_dat$time_s, this_dat$ch4)
+           ch4_results$Gas <- "CH4"
+         })
+         bind_rows(co2_results, ch4_results) |> 
+           bind_cols(tibble(g = g, db = db, ml = ml, n = nrow(this_dat))) ->
+           results[[paste(g, db, ml)]]
+       }
+     }
+   }
+   
+   results <- bind_rows(results) |> as_tibble()
+   saveRDS(results, file = RESULTS_FILE)   
+ }
+
+
+```
+
+## Visualization...
+
+```{r}
+results |> 
+  ggplot(aes(x = lin_r.squared)) + 
+  geom_histogram(bins = 30) + 
+  facet_wrap(~Gas)
+```
