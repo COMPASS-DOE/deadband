@@ -21,7 +21,9 @@ set_theme(theme_bw())
 library(readr)
 ```
 
-## 2026 soil respiration – data prep
+# 2026 flood week soil GHGs
+
+## Data prep
 
 ```{r rs2026-data-prep}
 
@@ -111,7 +113,7 @@ RESULTS_FILE <- "results.RDS"
 
 ```
 
-## Visualization...
+## Overall visualization
 
 ```{r}
 results |> 
@@ -126,21 +128,21 @@ results |>
   facet_wrap(~Gas, scales = "free") + 
   ggtitle("Overall lin_flux.estimate distribution, all data")
 
+ggplot(results |> filter(ml == max(mls)), 
+       aes(db, lin_r.squared, group = g)) +
+  geom_line() + 
+  facet_wrap(~Gas) + 
+  ggtitle(paste0("Dead band versus R2, ml=", max(mls)))
+
 ggplot(results |> filter(db== 0), 
        aes(ml, lin_r.squared, group = g)) +
   geom_line() + 
   facet_wrap(~Gas) + 
   ggtitle("Measurement length versus R2, db=0")
 
-ggplot(results |> filter(ml == max(mls)), 
-       aes(db, lin_r.squared, group = g)) +
-  geom_line() + 
-  facet_wrap(~Gas) + 
-  ggtitle(paste0("Measurement length versus R2, ml=", max(mls)))
-
 ```
 
-## A by-collar look
+## Detailed by-collar look
 
 ```{r by-collar-look}
 #| fig-width: 10
@@ -171,6 +173,9 @@ for(gas in unique(results$Gas)) {
     transmute(Collar = Collar, 
               Trend = trends(p.value, estimate)) ->
     db_trends
+  # Finaly calculate whether it's curvilinear
+  # (increasing then decreasing)
+  # TODO
   
   # Plot and summary table
   p1 <- ggplot(dat_gas_db |> left_join(db_trends, by = "Collar"),
