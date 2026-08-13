@@ -256,12 +256,20 @@ ggplot(dat_fluxes_reptest, aes(co2_F_o, co2_F_o_R1)) +
   geom_point(na.rm = TRUE) + geom_abline() + 
   geom_smooth(method = lm, na.rm = TRUE, formula = y ~ x) + 
   ggtitle("CO2 two-rep average versus first rep only")
+message("t-test (N = ", nrow(dat_fluxes_reptest), "):")
 t.test(dat_fluxes_reptest$co2_F_o, dat_fluxes_reptest$co2_F_o_R1, paired = TRUE)
 
 ggplot(dat_fluxes_reptest, aes(ch4_F_o, ch4_F_o_R1)) + 
   geom_point(na.rm = TRUE) + geom_abline() + 
   geom_smooth(method = lm, na.rm = TRUE, formula = y ~ x) + 
-  ggtitle("CH4 two-rep average versus first rep only")
-t.test(dat_fluxes_reptest$ch4_F_o, dat_fluxes_reptest$ch4_F_o_R1, paired = TRUE)
+  ggtitle("CH4 two-rep average versus first rep only") +
+  facet_grid(. ~ ch4_F_o > 0, scales = "free", space = "free_x")
+
+ch4_negative <- dat_fluxes_reptest |> filter(ch4_F_o < 0)
+message("t-test (negative fluxes, N = ", nrow(ch4_negative), "):")
+t.test(ch4_negative$ch4_F_o, ch4_negative$ch4_F_o_R1, paired = TRUE)
+ch4_positive <- dat_fluxes_reptest |> filter(ch4_F_o >= 0)
+message("t-test (positive fluxes, N = ", nrow(ch4_positive), "):")
+t.test(ch4_positive$ch4_F_o, ch4_positive$ch4_F_o_R1, paired = TRUE)
 
 ```
