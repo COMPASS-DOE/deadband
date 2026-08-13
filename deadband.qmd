@@ -1,5 +1,8 @@
 ---
 title: "deadband"
+author:
+  name: Ben
+date: last-modified
 code-fold: true
 toc: true
 ---
@@ -71,12 +74,12 @@ mls <- c(30, 40, 50, 60)
 
 RESULTS_FILE <- "results.RDS"
  if(file.exists(RESULTS_FILE)) {
-   warning("Loading ", RESULTS_FILE)
+   warning("Reading ", RESULTS_FILE)
    results <- readRDS(RESULTS_FILE)
  } else {
    results <- list()
    for(g in sort(unique(dat$Group))) {
-     if(g %% 100 == 0) message(g)
+     if(g %% 50 == 0) message(g)
      for(db in dbs) {
        for(ml in mls) {
          dat |> 
@@ -93,13 +96,15 @@ RESULTS_FILE <- "results.RDS"
            ch4_results$Gas <- "CH4"
          })
          bind_rows(co2_results, ch4_results) |> 
-           bind_cols(tibble(g = g, db = db, ml = ml, n = nrow(this_dat))) ->
+           bind_cols(tibble(Collar = this_dat$Collar[1],
+                            g = g, db = db, ml = ml, n = nrow(this_dat))) ->
            results[[paste(g, db, ml)]]
        }
      }
    }
    
    results <- bind_rows(results) |> as_tibble()
+   message("Saving ", RESULTS_FILE)
    saveRDS(results, file = RESULTS_FILE)   
  }
 
@@ -112,5 +117,104 @@ RESULTS_FILE <- "results.RDS"
 results |> 
   ggplot(aes(x = lin_r.squared)) + 
   geom_histogram(bins = 30) + 
-  facet_wrap(~Gas)
+  facet_wrap(~Gas) + 
+  ggtitle("Overall lin_r.squared distribution, all data")
+
+results |> 
+  ggplot(aes(x = lin_flux.estimate)) + 
+  geom_histogram(bins = 30) + 
+  facet_wrap(~Gas, scales = "free") + 
+  ggtitle("Overall lin_flux.estimate distribution, all data")
+
+ggplot(results |> filter(db== 0), 
+       aes(ml, lin_r.squared, group = g)) +
+  geom_line() + 
+  facet_wrap(~Gas) + 
+  ggtitle("Measurement length versus R2, db=0")
+
+ggplot(results |> filter(ml == max(mls)), 
+       aes(db, lin_r.squared, group = g)) +
+  geom_line() + 
+  facet_wrap(~Gas) + 
+  ggtitle(paste0("Measurement length versus R2, ml=", max(mls)))
+
+```
+
+## A by-collar look
+
+```{r by-collar-look}
+#| fig-width: 10
+#| fig-height: 8
+
+# Plot, for all collars, how R2 values with changing dead band
+# and measurement length (i.e., the dm-ml-analysis above)
+# We plot the two gases separately; connect point by group number
+# to see the effect of the changing variable; and color by overall
+# trend for that collar.
+
+# Helper function
+trends <- function(p.values, estimates) {
+  x <- if_else(p.values > 0.05, "None", 
+          if_else(estimates < 0, "Negative", "Positive"))
+  factor(x, levels = c("None", "Positive", "Negative"))
+}
+
+for(gas in unique(results$Gas)) {
+  # Dead band
+  # Isolate the data for this gas and full measurement length
+  dat_gas_db <- results |> filter(Gas == gas, ml == max(mls))
+  # ...and calculate overall trend: positive, negative, or none
+  dat_gas_db |> 
+    group_by(Collar) |> 
+    reframe(broom::tidy(lm(lin_r.squared ~ db))) |> 
+    filter(term == "db") |>
+    transmute(Collar = Collar, 
+              Trend = trends(p.value, estimate)) ->
+    db_trends
+  
+  # Plot and summary table
+  p1 <- ggplot(dat_gas_db |> left_join(db_trends, by = "Collar"),
+         aes(db, lin_r.squared, color = Trend, group = g)) +
+    geom_line() +
+    facet_wrap(~Collar) + 
+    theme(strip.text = element_text(size = 6)) +
+    ggtitle(paste0(gas, " dead band effect by collar, ml=", max(mls))) +
+    scale_color_manual("Overall\ntrend", drop = FALSE, 
+                       values = c("black", "darkgreen", "darkred"))
+  print(p1)
+  
+  db_trends |> 
+    group_by(Trend) |> 
+    summarise(N = n()) |> 
+    print()
+  
+  # Measurement length
+  # Isolate the data for this gas and dead band of zero
+  dat_gas_ml <- results |> filter(Gas == gas, db == min(dbs))
+  # ...and calculate overall trend: positive, negative, or none
+  dat_gas_ml |> 
+    group_by(Collar) |> 
+    reframe(broom::tidy(lm(lin_r.squared ~ ml))) |> 
+    filter(term == "ml") |>
+    transmute(Collar = Collar, 
+              Trend = trends(p.value, estimate)) ->
+    ml_trends
+  
+  # Plot and summary table
+  p2 <- ggplot(dat_gas_ml |> left_join(ml_trends, by = "Collar"),
+         aes(ml, lin_r.squared, color = Trend, group = g)) +
+    geom_line() +
+    facet_wrap(~Collar) + 
+    theme(strip.text = element_text(size = 6)) +
+    ggtitle(paste0(gas, " measurement length effect by collar, db=", min(dbs))) +
+    scale_color_manual("Overall\ntrend", drop = FALSE,
+                       values = c("black", "darkgreen", "darkred"))
+  print(p2)
+  
+  db_trends |> 
+    group_by(Trend) |> 
+    summarise(N = n()) |> 
+    print()
+}
+
 ```
