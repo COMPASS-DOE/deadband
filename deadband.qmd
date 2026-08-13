@@ -40,7 +40,8 @@ for(f in files) {
     as_tibble() |> 
     select(Collar = label, RepNum, TIMESTAMP, 
            co2, ch4, DeadBand,
-           soilp_c, soilp_m, soilp_t) |> 
+           soilp_c, soilp_m, soilp_t,
+           co2_F_o, ch4_F_o) |> 
     mutate(Collar = as.integer(Collar),
            AMPM = if_else(am(TIMESTAMP), "AM", "PM")) ->
     dat_list[[f]]
@@ -221,5 +222,46 @@ for(gas in unique(results$Gas)) {
     summarise(N = n()) |> 
     print()
 }
+
+```
+
+## Repetitions
+
+If we had stopped after one repetition, would we have gotten the same flux?
+
+```{r}
+# Use the Smart Chamber fluxes for this
+dat |> 
+  group_by(Group, RepNum, Collar) |> 
+  summarise(co2_F_o = mean(co2_F_o),
+            ch4_F_o = mean(ch4_F_o), .groups = "drop") ->
+  dat_fluxes
+
+dat_fluxes |> 
+  filter(RepNum == 1) |> 
+  rename(co2_F_o_R1 = co2_F_o, ch4_F_o_R1 = ch4_F_o) |> 
+  select(-RepNum) ->
+  dat_fluxes_R1
+
+dat_fluxes |> 
+  # overwrite Group numbers to be 1, 1, 3, 3, 5, 5, etc., rather than 1, 2, 3, 4...
+  mutate(Group = floor((Group - 1) / 2) * 2 + 1) |> 
+  group_by(Group, Collar) |> 
+  summarise(co2_F_o = mean(co2_F_o), 
+            ch4_F_o = mean(ch4_F_o), .groups = "drop") |> 
+  left_join(dat_fluxes_R1, by = c("Group", "Collar")) ->
+  dat_fluxes_reptest
+
+ggplot(dat_fluxes_reptest, aes(co2_F_o, co2_F_o_R1)) + 
+  geom_point(na.rm = TRUE) + geom_abline() + 
+  geom_smooth(method = lm, na.rm = TRUE, formula = y ~ x) + 
+  ggtitle("CO2 two-rep average versus first rep only")
+t.test(dat_fluxes_reptest$co2_F_o, dat_fluxes_reptest$co2_F_o_R1, paired = TRUE)
+
+ggplot(dat_fluxes_reptest, aes(ch4_F_o, ch4_F_o_R1)) + 
+  geom_point(na.rm = TRUE) + geom_abline() + 
+  geom_smooth(method = lm, na.rm = TRUE, formula = y ~ x) + 
+  ggtitle("CH4 two-rep average versus first rep only")
+t.test(dat_fluxes_reptest$ch4_F_o, dat_fluxes_reptest$ch4_F_o_R1, paired = TRUE)
 
 ```
