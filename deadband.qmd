@@ -75,22 +75,31 @@ dat |>
 dbs <- c(0, 5, 10, 15, 20)
 mls <- c(30, 40, 50, 60)
 
+# We cache the results, as this is slow (a few minutes on my laptop)
+# Remove the saved file to force recalculation
 RESULTS_FILE <- "results.RDS"
  if(file.exists(RESULTS_FILE)) {
    warning("Reading ", RESULTS_FILE)
    results <- readRDS(RESULTS_FILE)
  } else {
+   # For each group, calculate how R2 changes as 
+   # dead band and measurement length vary
    results <- list()
    for(g in sort(unique(dat$Group))) {
      if(g %% 50 == 0) message(g)
+     # Isolate group data
+     dat_g <- filter(dat, Group == g)
+     if(nrow(dat_g) == 0) next
+    
      for(db in dbs) {
        for(ml in mls) {
-         dat |> 
-           # isolate this group and drop data in the dead band
-           filter(Group == g, time_s > db) |> 
-           # drop data beyond the measurement length
+         dat_g |> 
+           # Drop data in the dead band...
+           filter(time_s > db) |> 
+           # ...and drop data beyond the measurement length
            slice_head(n = ml) ->
            this_dat
+         if(nrow(this_dat) == 0) next
          
          suppressWarnings({
            co2_results <- fluxfinder::ffi_fit_models(this_dat$time_s, this_dat$co2)
@@ -98,6 +107,7 @@ RESULTS_FILE <- "results.RDS"
            ch4_results <- fluxfinder::ffi_fit_models(this_dat$time_s, this_dat$ch4)
            ch4_results$Gas <- "CH4"
          })
+         # save the results and move on
          bind_rows(co2_results, ch4_results) |> 
            bind_cols(tibble(Collar = this_dat$Collar[1],
                             g = g, db = db, ml = ml, n = nrow(this_dat))) ->
@@ -149,8 +159,8 @@ ggplot(results |> filter(db== 0),
 #| fig-width: 10
 #| fig-height: 8
 
-# Plot, for all collars, how R2 values with changing dead band
-# and measurement length (i.e., the dm-ml-analysis above)
+# Plot how R2 values with changing dead band and measurement length 
+# (i.e., the dm-ml-analysis above) for each collar.
 # We plot the two gases separately; connect point by group number
 # to see the effect of the changing variable; and color by overall
 # trend for that collar.
@@ -257,7 +267,7 @@ ggplot(dat_fluxes_reptest, aes(co2_F_o, co2_F_o_R1)) +
   geom_smooth(method = lm, na.rm = TRUE, formula = y ~ x) + 
   ggtitle("CO2 two-rep average versus first rep only")
 message("t-test (N = ", nrow(dat_fluxes_reptest), "):")
-t.test(dat_fluxes_reptest$co2_F_o, dat_fluxes_reptest$co2_F_o_R1, paired = TRUE)
+t.test(dat_fluxes_reptest$co2_F_o_R1, dat_fluxes_reptest$co2_F_o, paired = TRUE)
 
 ggplot(dat_fluxes_reptest, aes(ch4_F_o, ch4_F_o_R1)) + 
   geom_point(na.rm = TRUE) + geom_abline() + 
@@ -267,9 +277,11 @@ ggplot(dat_fluxes_reptest, aes(ch4_F_o, ch4_F_o_R1)) +
 
 ch4_negative <- dat_fluxes_reptest |> filter(ch4_F_o < 0)
 message("t-test (negative fluxes, N = ", nrow(ch4_negative), "):")
-t.test(ch4_negative$ch4_F_o, ch4_negative$ch4_F_o_R1, paired = TRUE)
+t.test(ch4_negative$ch4_F_o_R1, ch4_negative$ch4_F_o, paired = TRUE)
 ch4_positive <- dat_fluxes_reptest |> filter(ch4_F_o >= 0)
 message("t-test (positive fluxes, N = ", nrow(ch4_positive), "):")
-t.test(ch4_positive$ch4_F_o, ch4_positive$ch4_F_o_R1, paired = TRUE)
+t.test(ch4_positive$ch4_F_o_R1, ch4_positive$ch4_F_o, paired = TRUE)
 
 ```
+
+**Conclusion: first-rep values are significantly larger for CO2 emissions and CH4 uptake; no difference for CH4 emissions.**
