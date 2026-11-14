@@ -353,4 +353,6 @@ t.test(ch4_positive$ch4_F_o_R1, ch4_positive$ch4_F_o, paired = TRUE)
 
 ```
 
-**Conclusion: first-rep values are significantly larger for CO2 emissions and CH4 uptake; no difference for CH4 emissions.**
+::: {.callout-note title="Conclusion"}
+First-rep values are significantly larger for CO2 emissions and CH4 uptake; no difference for CH4 emissions.
+:::
