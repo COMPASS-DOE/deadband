@@ -203,6 +203,16 @@ results |>
   theme(legend.position = "bottom", legend.text = element_text(angle = 90)) +
   geom_smooth(method = lm, formula = 'y ~ x',
               linetype = 2, color = "black", na.rm = TRUE)
+
+results |> 
+  filter(db == min(db), ml == max(ml)) |> 
+  ggplot(aes(lin_r.squared, HM81_r.squared)) +
+  geom_point(na.rm = TRUE) + 
+  facet_wrap(~Gas, scales = "free") + 
+  geom_abline() +
+  theme(legend.position = "bottom", legend.text = element_text(angle = 90)) +
+  geom_smooth(method = lm, formula = 'y ~ x',
+              linetype = 2, color = "black", na.rm = TRUE)
 ```
 
 ::: {.callout-note title="Conclusion"}
