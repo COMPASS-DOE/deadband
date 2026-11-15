@@ -82,8 +82,7 @@ dat202024 |>
   bind_rows(dat2026) ->
   dat
 rm(dat202024, dat2026)
-message("Toal: ", nrow(dat), " 2020-2026 rows")
-
+message("Total: ", nrow(dat), " 2020-2026 rows")
 ```
 
 Metadata:
@@ -93,6 +92,9 @@ Metadata:
 dat$Group <- dat |> 
   group_by(yday(TIMESTAMP), Collar, RepNum, co2_F_o) |> 
   group_indices()
+
+n_fluxes <- length(unique(dat$Group))
+message("Individual flux measurements (groups): ", n_fluxes)
 
 # Metadata
 METADATA_FILE <- "metadata/mapping.csv"
@@ -107,15 +109,31 @@ dat |>
   dat
 ```
 
+```{r qaqc}
+# There are some bizarrely long (in terms of time) groups
+# Not sure what's going on with that! Drop 'em
+dat |>
+  group_by(Group) |> 
+  summarise(max_time_s = max(time_s)) ->
+  time_smry
+message(sum(time_smry$max_time_s > 119), " of ", n_fluxes,
+        " groups are over 119 s; removing")
+
+dat |> 
+  group_by(Group) |> 
+  filter_out(max(time_s) > 119) -> 
+  dat
+```
+
 # Results
 
-Soil flux observations: `r nrow(dat)`
+Soil GHG concentration observations: `r nrow(dat)`
 
 ```{r dm-ml-analysis}
 dbs <- c(0, 5, 10, 15, 20)
-mls <- c(30, 40, 50, 60)
+mls <- c(20, 30, 40, 50, 60)
 
-# We cache the results, as this is slow (a few minutes on my laptop)
+# We cache the results, as this is slow (~1 hour on my laptop)
 # Remove the saved file to force recalculation
 RESULTS_FILE <- "results.RDS"
  if(file.exists(RESULTS_FILE)) {
@@ -136,6 +154,7 @@ RESULTS_FILE <- "results.RDS"
     
      for(db in dbs) { # dead band loop
        for(ml in mls) { # measurement length loop
+         if(db + ml > 60) next # too long
          dat_g |> 
            # Drop data in the dead band...
            filter(time_s > db) |> 
@@ -144,20 +163,26 @@ RESULTS_FILE <- "results.RDS"
            this_dat
          if(nrow(this_dat) == 0) next
          
-         suppressWarnings({
-           co2_results <- fluxfinder::ffi_fit_models(this_dat$time_s, this_dat$co2)
-           co2_results$Gas <- "CO2"
-           ch4_results <- fluxfinder::ffi_fit_models(this_dat$time_s, this_dat$ch4)
-           ch4_results$Gas <- "CH4"
-         })
-         # save the results and move on
-         bind_rows(co2_results, ch4_results) |> 
+         # There are flux calculations that error inside of fluxfinder
+         # so wrap this part in try()
+         try({
+           suppressWarnings({
+             co2_results <- fluxfinder::ffi_fit_models(this_dat$time_s, this_dat$co2)
+             co2_results$Gas <- "CO2"
+             ch4_results <- fluxfinder::ffi_fit_models(this_dat$time_s, this_dat$ch4)
+             ch4_results$Gas <- "CH4"
+           })
+           # save the results and move on
+           bind_rows(co2_results, ch4_results) |> 
            bind_cols(tibble(Collar = this_dat$Collar[1],
-                            grp = grp, db = db, ml = ml, n = nrow(this_dat))) ->
+                            grp = grp, db = db, ml = ml, 
+                            n = nrow(this_dat))) ->
            results[[paste(grp, db, ml)]]
-       }
-     }
-   }
+         }) # try
+
+       } # for ml
+     } # for db
+   } # for g
    
    results <- bind_rows(results) |> as_tibble()
    message("Saving ", RESULTS_FILE)
