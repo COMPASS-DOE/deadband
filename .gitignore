@@ -15,4 +15,4 @@ _quarto.yml
 
 # Data?
 *.json
-results.RDS
+*.RDS
