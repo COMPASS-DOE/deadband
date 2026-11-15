@@ -37,7 +37,7 @@ library(readr)
 
 ```{r rs2026-data-prep}
 
-# Find the data files
+# Find the 2026 TEMPEST data files
 files <- list.files(pattern = "json$", 
                     path = "data/",
                     full.names = TRUE) 
@@ -46,34 +46,61 @@ message("Found ", length(files), " data files")
 dat_list <- list()
 for(f in files) {
   #message("\tReading ", f)
-  ffi_read_LIsmartchamber(f) |> 
+  ffi_read_LIsmartchamber(f, concentrations = TRUE) |> 
     as_tibble() |> 
     select(Collar = label, RepNum, TIMESTAMP, 
            co2, ch4, DeadBand,
            soilp_c, soilp_m, soilp_t,
            co2_F_o, ch4_F_o) |> 
-    mutate(Collar = as.integer(Collar),
-           AMPM = if_else(am(TIMESTAMP), "AM", "PM")) ->
+    mutate(Collar = as.integer(Collar)) ->
     dat_list[[f]]
 }
 # Join everything together
-dat <- bind_rows(dat_list)
-message("Read ", nrow(dat), " rows")
+dat2026 <- bind_rows(dat_list)
+message("Read ", nrow(dat2026), " 2026 rows")
+```
+
+```{r rs202024-data-prep}
+#fluxes <- read_csv("data/ess-dive/fluxes.csv", show_col_types = FALSE)
+conc_files <- list.files("data/ess-dive/concentrations/", pattern = "csv$", full.names = TRUE)
+dat_list <- list()
+for(f in conc_files) {
+  read_csv(f, show_col_types = FALSE, guess_max = Inf) |> 
+    select(Collar = label, RepNum, TIMESTAMP, 
+           co2, ch4, DeadBand,
+           soilp_c, soilp_m, soilp_t,
+           co2_F_o, ch4_F_o) |> 
+    mutate(Collar = as.integer(Collar)) ->
+    dat_list[[f]]
+}
+
+# Join everything together
+dat202024 <- bind_rows(dat_list)
+message("Read ", nrow(dat202024), " 2020-2024 rows")
+
+dat202024 |> 
+  bind_rows(dat2026) ->
+  dat
+rm(dat202024, dat2026)
+message("Toal: ", nrow(dat), " 2020-2026 rows")
+
+```
+
+Metadata:
+
+```{r metadata}
+# Groups
+dat$Group <- dat |> 
+  group_by(yday(TIMESTAMP), Collar, RepNum, co2_F_o) |> 
+  group_indices()
 
 # Metadata
 METADATA_FILE <- "metadata/mapping.csv"
 message("Reading ", METADATA_FILE)
 md <- read_csv(METADATA_FILE, col_types = "icc")
 dat |> 
-  left_join(md, by = "Collar") ->
-  dat
-
-# Compute 'Group' and "time_s' columns
-dat$Group <- dat |> 
-  group_by(yday(TIMESTAMP), Collar, RepNum, AMPM) |> 
-  group_indices()
-
-dat |> 
+  left_join(md, by = "Collar") |> 
+  # compute elapsed time
   group_by(Group) |> 
   mutate(time_s = as.numeric(TIMESTAMP - min(TIMESTAMP))) |> 
   ungroup() ->
@@ -95,7 +122,7 @@ RESULTS_FILE <- "results.RDS"
    warning("Reading ", RESULTS_FILE)
    results <- readRDS(RESULTS_FILE)
  } else {
-   # For each group, calculate how R2 changes as 
+   # For each group, calculate how R2 and other metrics change as 
    # dead band and measurement length vary
    results <- list()
    grouplist <- sort(unique(dat$Group))
@@ -140,7 +167,6 @@ RESULTS_FILE <- "results.RDS"
 results |> 
   filter(db == min(db), ml == max(ml)) ->
   results_all_obs_only
-
 ```
 
 ## Overall visualization
