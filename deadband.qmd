@@ -213,7 +213,7 @@ RESULTS_FILE <- "results.RDS"
 
 results |> 
   filter(db == min(db), ml == max(ml)) ->
-  results_all_obs_only
+  fluxes_all_obs
 ```
 
 ## Overall visualization
@@ -222,17 +222,17 @@ results |>
 #| fig-width: 8
 #| label: fig-r2-hist
  
-results_all_obs_only |> 
+fluxes_all_obs |> 
   ggplot(aes(x = lin_r.squared)) + 
   geom_histogram(bins = 30) + 
   facet_wrap(~Gas) + 
   ggtitle("Overall lin_r.squared distribution, all data")
 
-message("CH4 quantiles:")
-quantile(results_all_obs_only$lin_r.squared[results_all_obs_only$Gas == "CH4"]) |> 
+message("CH4 quantiles for linear R2:")
+quantile(fluxes_all_obs$lin_r.squared[fluxes_all_obs$Gas == "CH4"]) |> 
   round(digits = 2)
-message("CO2 quantiles:")
-quantile(results_all_obs_only$lin_r.squared[results_all_obs_only$Gas == "CO2"]) |> 
+message("CO2 quantiles for linear R2:")
+quantile(fluxes_all_obs$lin_r.squared[fluxes_all_obs$Gas == "CO2"]) |> 
   round(digits = 2)
 ```
 
@@ -244,11 +244,34 @@ Computed CO2 fluxes had very high R2 overall; less so for CH4, but even there 50
 #| fig-width: 8
 #| label: fig-flux-hist
 
-results_all_obs_only |> 
+# At this point we filter out data to the {1%, 99%} quantile
+qnt <- c(0.005, .995)
+fluxes_all_obs |> 
+  group_by(Gas) |> 
+  reframe(quant = quantile(lin_flux.estimate, qnt)) |>
+  mutate(which = c("005", "995","005", "995")) |>
+  pivot_wider(names_from="which", values_from = "quant",
+              names_prefix = "quant") -> 
+  flux_quantiles
+qnt_string <- paste0("(", qnt[1], ", ", qnt[2], ")")
+message("Limiting data to ", qnt_string, " quantiles")
+print(flux_quantiles)
+
+fluxes_all_obs |> 
+  left_join(flux_quantiles, by = "Gas") |> 
+  filter(lin_flux.estimate >= quant005, lin_flux.estimate <= quant995) ->
+  fluxes_filtered
+
+results |> 
+  left_join(flux_quantiles, by = "Gas") |> 
+  filter(lin_flux.estimate >= quant005, lin_flux.estimate <= quant995) ->
+  results_filtered
+
+fluxes_filtered |> 
   ggplot(aes(x = lin_flux.estimate)) + 
   geom_histogram(bins = 30) + 
   facet_wrap(~Gas, scales = "free") + 
-  ggtitle("Overall lin_flux.estimate distribution, all data")
+  ggtitle(paste0("Overall lin_flux.estimate ", qnt_string))
 ```
 
 ## Nonlinearity
@@ -276,30 +299,30 @@ results |>
 #| fig-width: 8
 #| label: fig-nonlinear-flux-comparison
 
-results_all_obs_only |> 
+fluxes_filtered |> 
   ggplot(aes(lin_flux.estimate, HM81_flux.estimate)) +
-  geom_point(aes(color = lin_r.squared), na.rm = TRUE) + 
+  geom_point(aes(color = lin_r.squared), alpha = 0.5, size = 0.5, na.rm = TRUE) + 
   facet_wrap(~Gas, scales = "free") + 
   geom_abline() +
   theme(legend.position = "bottom", legend.text = element_text(angle = 90)) +
   geom_smooth(method = lm, formula = 'y ~ x',
-              linetype = 2, color = "black", na.rm = TRUE)
-
-
+              linetype = 2, color = "black", na.rm = TRUE) +
+  ggtitle(paste("Nonlinear fluxes", qnt_string))
 ```
 
 ```{r nonlinearity3}
 #| fig-width: 8
 #| label: fig-nonlinear-r2-comparison
 
-results_all_obs_only |> 
+fluxes_filtered |> 
   ggplot(aes(lin_r.squared, HM81_r.squared)) +
-  geom_point(na.rm = TRUE) + 
+  geom_point(size = 0.5, alpha = 0.5, na.rm = TRUE) + 
   facet_wrap(~Gas, scales = "free") + 
   geom_abline() +
   theme(legend.position = "bottom", legend.text = element_text(angle = 90)) +
   geom_smooth(method = lm, formula = 'y ~ x',
-              linetype = 2, color = "black", na.rm = TRUE)
+              linetype = 2, color = "black", na.rm = TRUE) +
+  ggtitle(paste("Nonlinear R2s", qnt_string))
 ```
 
 
@@ -315,15 +338,18 @@ Failing to account for nonlinearity tends to underestimate the flux.
 
 # Does dead band affect the R2 of the linear flux?
 
-db_results <- results |> 
-  filter(ml == max(mls)) |> 
-  slice_sample(n = 5000)
-db_results |> 
+# For each dead band level we only want the max measurement length
+results_filtered |> 
+  group_by(Gas, db) |> 
+  filter(ml == max(ml)) ->
+  results_db
+
+results_db |> 
   group_by(Gas, db) |> 
   summarise(lin_r.squared = mean(lin_r.squared), .groups = "drop") ->
   db_results_mean
 
-ggplot(db_results, 
+ggplot(db_results |> slice_sample(n = 5000), 
        aes(db, lin_r.squared)) +
   geom_line(aes(group = grp), alpha = 0.1) + 
   geom_line(data = db_results_mean, color = "blue", linewidth = 1) +
