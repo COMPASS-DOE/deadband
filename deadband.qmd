@@ -39,6 +39,9 @@ mls <- c(30, 35, 40, 45, 50, 55, 60)
 * Test at what point concentration data get more nonlinear
 * Test whether doing two reps is worth it
 
+![https://www.licor.com/support/Smart-Chamber/topics/the-measurement-cycle.html](images/observation.svg)
+
+
 ## Data prep
 
 ```{r rs2026-data-prep}
@@ -337,11 +340,10 @@ fluxes_filtered |>
 Failing to account for nonlinearity tends to underestimate the CO2 flux.
 :::
 
-## Deadband and measurement length effects
+## Deadband effect
 
 ```{r}
-#| fig-width: 8
-#| label: fig-db-r2
+#| label: tbl-db-r2
 
 # Does dead band affect the R2 of the linear flux?
 
@@ -351,18 +353,46 @@ results_filtered |>
   filter(ml == max(ml)) ->
   db_results
 
+# How many groups have increasing, decreasing, no trend?]
+db_results |> 
+  group_by(Gas, grp) |> 
+  reframe(broom::tidy(lm(lin_r.squared ~ db))) |>
+  filter(term == "db") |> 
+  mutate(Trend = factor(if_else(p.value >= 0.05, "None", 
+                         if_else(estimate < 0, "Negative", "Positive")))) ->
+  db_trends
+
+db_trends |> 
+  group_by(Gas, Trend) |> 
+  summarise(N = n(), .groups = "drop_last") |> 
+  mutate(Fraction = N / sum(N)) |> 
+  knitr::kable(digits = 3,
+               caption = "Linear R2 trends with increasing dead band")
+```
+
+```{r}
+#| fig-width: 8
+#| label: fig-db-r2
+
+VIZ_SUBSAMPLE <- 1000
+
 db_results |> 
   group_by(Gas, db) |> 
   summarise(lin_r.squared = mean(lin_r.squared), .groups = "drop") ->
   db_results_mean
 
-ggplot(db_results |> slice_sample(n = 4000), 
-       aes(db, lin_r.squared)) +
-  geom_line(aes(group = grp), alpha = 0.1) + 
+db_results |> 
+  slice_sample(n = VIZ_SUBSAMPLE) |> 
+  left_join(db_trends, by = c("Gas", "grp")) |> 
+  filter(!is.na(Trend)) |> 
+  ggplot(aes(db, lin_r.squared)) +
+  geom_line(aes(group = grp, color = Trend), alpha = 0.1) + 
   geom_line(data = db_results_mean, color = "blue", linewidth = 1) +
-  facet_wrap(~Gas) + 
+  facet_wrap(~Gas) +
+  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
   coord_cartesian(ylim = c(0.5, 1.0)) +
-  ggtitle(paste0("Dead band versus R2, ml=", max(mls))) +
+  ggtitle(paste0("Dead band versus R2, ml=", max(mls)),
+          subtitle = paste("Random", VIZ_SUBSAMPLE, "subsample")) +
   xlab("Dead band (s)")
 ```
 
@@ -370,30 +400,60 @@ ggplot(db_results |> slice_sample(n = 4000),
 Using a dead band of 5s produces a small gain in the fitted flux, but after that only declines as we lose data.
 :::
 
+## Measurement length effect
+
 ```{r}
-#| fig-width: 8
-#| label: fig-ml-r2
+#| label: tbl-ml-r2
 
 # Does measurement length affect the R2 of the linear flux?
 
-# For each dead band level we only want the max measurement length
+# For each measurement length level we only want the min dead band
 results_filtered |> 
   group_by(Gas, ml) |> 
   filter(db == min(db)) ->
   ml_results
+
+# How many groups have increasing, decreasing, no trend?
+suppressWarnings({
+  ml_results |> 
+    group_by(Gas, grp) |> 
+    reframe(broom::tidy(lm(lin_r.squared ~ ml))) |>
+    filter(term == "ml") |> 
+    mutate(Trend = factor(if_else(p.value >= 0.05, "None", 
+                                  if_else(estimate < 0, "Negative", "Positive")))) ->
+    ml_trends
+})
+
+ml_trends |> 
+  group_by(Gas, Trend) |> 
+  summarise(N = n(), .groups = "drop_last") |> 
+  mutate(Fraction = N / sum(N)) |> 
+  knitr::kable(digits = 3,
+               caption = "Linear R2 trends with increasing measurement length")
+```
+
+
+```{r}
+#| fig-width: 8
+#| label: fig-ml-r2
 
 ml_results |> 
   group_by(Gas, ml) |> 
   summarise(lin_r.squared = mean(lin_r.squared), .groups = "drop") ->
   ml_results_mean
 
-ggplot(ml_results |> slice_sample(n = 4000), 
-       aes(ml, lin_r.squared)) +
-  geom_line(aes(group = grp), alpha = 0.1) + 
+ml_results |> 
+  slice_sample(n = VIZ_SUBSAMPLE) |> 
+  left_join(ml_trends, by = c("Gas", "grp")) |> 
+  filter(!is.na(Trend)) |> 
+  ggplot(aes(ml, lin_r.squared)) +
+  geom_line(aes(group = grp, color = Trend), alpha = 0.1) + 
   geom_line(data = ml_results_mean, color = "blue", linewidth = 1) +
   facet_wrap(~Gas) + 
+  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
   coord_cartesian(ylim = c(0.5, 1.0)) +
-  ggtitle("Measurement length versus R2, db=0") +
+  ggtitle("Measurement length versus R2, db=0",
+          subtitle = paste("Random", VIZ_SUBSAMPLE, "subsample")) +
   xlab("Measurement length (s)")
 ```
 ::: {.callout-note title="Conclusion"}
