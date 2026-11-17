@@ -28,8 +28,15 @@ library(ggplot2)
 set_theme(theme_bw(base_size = 16))
 library(readr)
 
+# Dead band and measurement length settings to try
 dbs <- c(0, 5, 10, 15, 20, 25, 30)
 mls <- c(30, 35, 40, 45, 50, 55, 60)
+
+# Helper function
+trend_labels <- function(p.values, estimates) {
+  if_else(p.values > 0.05, "None", 
+          if_else(estimates < 0, "Negative", "Positive"))
+}
 ```
 
 # Methods
@@ -358,8 +365,7 @@ db_results |>
   group_by(Gas, grp) |> 
   reframe(broom::tidy(lm(lin_r.squared ~ db))) |>
   filter(term == "db") |> 
-  mutate(Trend = factor(if_else(p.value >= 0.05, "None", 
-                         if_else(estimate < 0, "Negative", "Positive")))) ->
+  mutate(Trend = trend_labels(p.value, estimate)) ->
   db_trends
 
 db_trends |> 
@@ -374,7 +380,7 @@ db_trends |>
 #| fig-width: 8
 #| label: fig-db-r2
 
-VIZ_SUBSAMPLE <- 1000
+VIZ_SUBSAMPLE <- 2000
 
 db_results |> 
   group_by(Gas, db) |> 
@@ -387,7 +393,7 @@ db_results |>
   filter(!is.na(Trend)) |> 
   ggplot(aes(db, lin_r.squared)) +
   geom_line(aes(group = grp, color = Trend), alpha = 0.1) + 
-  geom_line(data = db_results_mean, color = "blue", linewidth = 1) +
+  geom_line(data = db_results_mean, color = "black", linewidth = 1) +
   facet_wrap(~Gas) +
   guides(colour = guide_legend(override.aes = list(alpha = 1))) +
   coord_cartesian(ylim = c(0.5, 1.0)) +
@@ -419,8 +425,7 @@ suppressWarnings({
     group_by(Gas, grp) |> 
     reframe(broom::tidy(lm(lin_r.squared ~ ml))) |>
     filter(term == "ml") |> 
-    mutate(Trend = factor(if_else(p.value >= 0.05, "None", 
-                                  if_else(estimate < 0, "Negative", "Positive")))) ->
+    mutate(Trend = trend_labels(p.value, estimate)) ->
     ml_trends
 })
 
@@ -448,7 +453,7 @@ ml_results |>
   filter(!is.na(Trend)) |> 
   ggplot(aes(ml, lin_r.squared)) +
   geom_line(aes(group = grp, color = Trend), alpha = 0.1) + 
-  geom_line(data = ml_results_mean, color = "blue", linewidth = 1) +
+  geom_line(data = ml_results_mean, color = "black", linewidth = 1) +
   facet_wrap(~Gas) + 
   guides(colour = guide_legend(override.aes = list(alpha = 1))) +
   coord_cartesian(ylim = c(0.5, 1.0)) +
@@ -472,13 +477,6 @@ At least out to 60s, longer measurements means better model fits.
 # to see the effect of the changing variable; and color by overall
 # trend for that collar.
 
-# Helper function
-trends <- function(p.values, estimates) {
-  x <- if_else(p.values > 0.05, "None", 
-          if_else(estimates < 0, "Negative", "Positive"))
-  factor(x, levels = c("None", "Positive", "Negative"))
-}
-
 for(gas in unique(results$Gas)) {
   # Dead band
   # Isolate the data for this gas and full measurement length
@@ -489,7 +487,7 @@ for(gas in unique(results$Gas)) {
     reframe(broom::tidy(lm(lin_r.squared ~ db))) |> 
     filter(term == "db") |>
     transmute(Collar = Collar, 
-              Trend = trends(p.value, estimate)) ->
+              Trend = trend_labels(p.value, estimate)) ->
     db_trends
   # Finaly calculate whether it's curvilinear
   # (increasing then decreasing)
@@ -504,6 +502,7 @@ for(gas in unique(results$Gas)) {
     ggtitle(paste0(gas, " dead band effect by collar, ml=", max(mls))) +
     scale_color_manual("Overall\ntrend", drop = FALSE, 
                        values = c("black", "darkgreen", "darkred")) +
+    guides(colour = guide_legend(override.aes = list(alpha = 1))) +
     xlab("Dead band (s)")
   print(p1)
   
@@ -521,7 +520,7 @@ for(gas in unique(results$Gas)) {
     reframe(broom::tidy(lm(lin_r.squared ~ ml))) |> 
     filter(term == "ml") |>
     transmute(Collar = Collar, 
-              Trend = trends(p.value, estimate)) ->
+              Trend = trend_labels(p.value, estimate)) ->
     ml_trends
   
   # Plot and summary table
@@ -533,6 +532,7 @@ for(gas in unique(results$Gas)) {
     ggtitle(paste0(gas, " measurement length effect by collar, db=", min(dbs))) +
     scale_color_manual("Overall\ntrend", drop = FALSE,
                        values = c("black", "darkgreen", "darkred")) +
+    guides(colour = guide_legend(override.aes = list(alpha = 1))) +
     xlab("Measurement length (s)")
   print(p2)
   
@@ -541,7 +541,6 @@ for(gas in unique(results$Gas)) {
     summarise(N = n()) |> 
     print()
 }
-
 ```
 
 ## Repetitions
@@ -617,6 +616,12 @@ t.test(ch4_positive$ch4_F_o_R1, ch4_positive$ch4_F_o, paired = TRUE)
 ::: {.callout-note title="Conclusion"}
 No difference overall between first-rep-only fluxes and two-rep means.
 :::
+
+# Reproducibility
+
+```{r reproducibility}
+sessionInfo()
+```
 
 # POSTER
 
