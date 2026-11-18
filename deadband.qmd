@@ -250,7 +250,7 @@ Computed CO2 fluxes had very high linear-model R2 overall; less so for CH4, but 
 :::
 
 ```{r}
-#| label: tbl-quantiles
+#| label: tbl-flux-quantiles
 
 # At this point we filter data to the {1%, 99%} quantile
 qnt <- c(0.005, .995)
@@ -342,9 +342,79 @@ fluxes_filtered |>
   ggtitle(paste("Nonlinear R2s", qnt_string))
 ```
 
-
 ::: {.callout-note title="Conclusion"}
 Failing to account for nonlinearity tends to underestimate the CO2 flux.
+:::
+
+## Initial concentration
+
+```{r}
+#| label: tbl-conc-quantiles
+
+# Get the initial gas concentrations for each group...
+dat |> 
+  arrange(Group, time_s) |> 
+  group_by(Group) |> 
+  slice_head(n = 1) |> 
+  select(Group, co2, ch4) |> 
+  pivot_longer(-Group, names_to = "Gas", values_to = "gas_c0") |> 
+  mutate(Gas = toupper(Gas)) -> 
+  init_concentrations
+
+# ...and compute their quantiles
+init_concentrations |> 
+  group_by(Gas) |> 
+  reframe(quant = quantile(gas_c0, qnt)) |> 
+  mutate(which = rep(c("q1", "q2"), length(unique(Gas)))) |>
+  pivot_wider(names_from = "which", values_from = "quant") -> 
+  conc_quantiles
+
+ knitr::kable(conc_quantiles, 
+             col.names = c("Gas", qnt),
+             digits = 1,
+             caption = "99% quantiles of initial CH4 and CO2 concentrations")
+```
+
+
+```{r}
+#| label: fig-c0-flux
+#| fig-width: 8
+
+# Combine initial concentration data and quantile data with 
+# fluxes and filter
+fluxes_filtered |> 
+  # get rid of old quantile columns
+  select(-q1, -q2) |> 
+  left_join(init_concentrations, by = c("grp" = "Group", "Gas" = "Gas")) |> 
+  left_join(conc_quantiles, by = "Gas") |> 
+  filter(gas_c0 >= q1, 
+         gas_c0 <= q2) ->
+  ff_inits
+
+ggplot(ff_inits, aes(gas_c0, lin_flux.estimate, color = lin_r.squared)) +
+  geom_point(size = 0.5, alpha = 0.5) + 
+  facet_wrap(~Gas, scales = "free") +
+  ggtitle(paste("Initial concentration versus linear flux", qnt_string))
+```
+
+::: {.callout-note title="Conclusion"}
+Small fluxes have low R2 values. Some suggestion that higher starting concentrations result in lower fluxes.
+:::
+
+```{r}
+#| label: fig-c0-r2
+#| fig-width: 8
+
+ff_inits |> 
+  mutate(Positive_flux = lin_flux.estimate > 0) |> 
+  ggplot(aes(gas_c0, lin_r.squared, color = Positive_flux)) +
+  geom_point(size = 0.5, alpha = 0.5) + 
+  facet_wrap(~Gas, scales = "free_x") +
+  ggtitle("Initial concentration versus linear R2")
+```
+
+::: {.callout-note title="Conclusion"}
+Positive fluxes (for CH4) and negative fluxes (for CO2) have poor model fits.
 :::
 
 ## Deadband effect
@@ -461,6 +531,7 @@ ml_results |>
           subtitle = paste("Random", VIZ_SUBSAMPLE, "subsample")) +
   xlab("Measurement length (s)")
 ```
+
 ::: {.callout-note title="Conclusion"}
 At least out to 60s, longer measurements means better model fits.
 :::
