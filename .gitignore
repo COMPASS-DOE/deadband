@@ -16,3 +16,6 @@ _quarto.yml
 # Data?
 *.json
 *.RDS
+
+# AGU26 poster graphics
+poster_figures/*.png

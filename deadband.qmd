@@ -469,7 +469,11 @@ db_results |>
   coord_cartesian(ylim = c(0.5, 1.0)) +
   ggtitle(paste0("Dead band versus R2, ml=", max(mls)),
           subtitle = paste("Random", VIZ_SUBSAMPLE, "subsample")) +
-  xlab("Dead band (s)")
+  xlab("Dead band (s)") + 
+  ylab(expression(Model~R^2))
+
+ggsave("poster_figures/deadband_effect.png", width = 12, height = 6,
+       plot = last_plot() + ggtitle("", subtitle = ""))
 ```
 
 ::: {.callout-note title="Conclusion"}
@@ -529,7 +533,11 @@ ml_results |>
   coord_cartesian(ylim = c(0.5, 1.0)) +
   ggtitle("Measurement length versus R2, db=0",
           subtitle = paste("Random", VIZ_SUBSAMPLE, "subsample")) +
-  xlab("Measurement length (s)")
+  xlab("Measurement length (s)") + 
+  ylab(expression(Model~R^2))
+
+ggsave("poster_figures/ml_effect.png", width = 12, height = 6,
+       plot = last_plot() + ggtitle("", subtitle = ""))
 ```
 
 ::: {.callout-note title="Conclusion"}
