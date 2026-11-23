@@ -51,44 +51,11 @@ trend_labels <- function(p.values, estimates) {
 
 ## Data prep
 
-```{r rs2026-data-prep}
-DATAFILE_2026 <- "dat2026.RDS"
-if(file.exists(DATAFILE_2026)) {
-  message("Reading cached ", DATAFILE_2026)
-  dat2026 <- readRDS(DATAFILE_2026)
-} else {
-  # Find the 2026 TEMPEST data files
-  files <- list.files(pattern = "json$", 
-                      path = "data/",
-                      full.names = TRUE) 
-  message("Found ", length(files), " data files")
-  
-  dat_list <- list()
-  for(f in files) {
-    #message("\tReading ", f)
-    ffi_read_LIsmartchamber(f, concentrations = TRUE) |> 
-      as_tibble() |> 
-      select(Collar = label, RepNum, TIMESTAMP, 
-             co2, ch4, DeadBand,
-             soilp_c, soilp_m, soilp_t,
-             co2_F_o, ch4_F_o) |> 
-      mutate(Collar = as.integer(Collar)) ->
-      dat_list[[f]]
-  }
-  # Join everything together
-  dat2026 <- bind_rows(dat_list)
-  message("Saving ", DATAFILE_2026)
-  saveRDS(dat2026, DATAFILE_2026)
-}
-
-message("Read ", nrow(dat2026), " 2026 rows")
-```
-
-```{r rs202024-data-prep}
-DATAFILE_202024 <- "dat202024.RDS"
-if(file.exists(DATAFILE_202024)) {
-  message("Reading cached ", DATAFILE_202024)
-  dat202024 <- readRDS(DATAFILE_202024)
+```{r rs-data-prep}
+DATAFILE_202026 <- "dat202026.RDS"
+if(file.exists(DATAFILE_202026)) {
+  message("Reading cached ", DATAFILE_202026)
+  dat202026 <- readRDS(DATAFILE_202026)
 } else {
   conc_files <- list.files("data/ess-dive/concentrations/", pattern = "csv$", full.names = TRUE)
   dat_list <- list()
@@ -103,17 +70,15 @@ if(file.exists(DATAFILE_202024)) {
   }
   
   # Join everything together
-  dat202024 <- bind_rows(dat_list)
-  message("Saving ", DATAFILE_202024)
-  saveRDS(dat202024, DATAFILE_202024)
+  dat202026 <- bind_rows(dat_list)
+  message("Saving ", DATAFILE_202026)
+  saveRDS(dat202026, DATAFILE_202026)
 }
 
-message("Read ", nrow(dat202024), " 2020-2024 rows")
+message("Read ", nrow(dat202026), " 2020-2024 rows")
 
-dat202024 |> 
-  bind_rows(dat2026) ->
-  dat
-rm(dat202024, dat2026)
+dat <- dat202026
+rm(dat202026)
 message("Total: ", nrow(dat), " 2020-2026 rows")
 ```
 
@@ -165,6 +130,7 @@ Soil GHG concentration observations: `r nrow(dat)`
 ```{r db-ml-analysis}
 # We cache the results, as this is slow (several hours on my laptop)
 # Remove the saved file to force recalculation
+# There's no reason this can't be done much faster in parallel...
 RESULTS_FILE <- "results.RDS"
  if(file.exists(RESULTS_FILE)) {
    warning("Reading ", RESULTS_FILE)
@@ -233,7 +199,11 @@ fluxes_all_obs |>
   ggplot(aes(x = lin_r.squared)) + 
   geom_histogram(bins = 30) + 
   facet_wrap(~Gas) + 
-  ggtitle("Overall lin_r.squared distribution, all data")
+  ggtitle("Overall lin_r.squared distribution, all data") +
+  xlab(expression(Linear~model_R^2))
+
+ggsave("poster_figures/lin_r2_distribution.png", width = 10, height = 6,
+       plot = last_plot() + ggtitle("", subtitle = ""))
 
 message("CH4 quantiles for linear R2:")
 qch4 <- quantile(fluxes_all_obs$lin_r.squared[fluxes_all_obs$Gas == "CH4"]) |> 
@@ -288,7 +258,11 @@ fluxes_filtered |>
   ggplot(aes(x = lin_flux.estimate)) + 
   geom_histogram(bins = 30) + 
   facet_wrap(~Gas, scales = "free") + 
-  ggtitle(paste0("Overall lin_flux.estimate ", qnt_string))
+  ggtitle(paste0("Overall lin_flux.estimate ", qnt_string)) +
+  xlab(expression(Linear~model~flux~(nmol~and~µmol~m^-2~s^-1)))
+
+ggsave("poster_figures/lin_flux_distribution.png", width = 10, height = 6,
+       plot = last_plot() + ggtitle("", subtitle = ""))
 ```
 
 ## Nonlinearity
@@ -323,7 +297,7 @@ fluxes_filtered |>
   geom_abline() +
   theme(legend.position = "bottom", legend.text = element_text(angle = 90)) +
   geom_smooth(method = lm, formula = 'y ~ x',
-              linetype = 2, color = "black", na.rm = TRUE) +
+              linetype = 2, color = "blue", na.rm = TRUE) +
   ggtitle(paste("Nonlinear fluxes", qnt_string))
 ```
 
@@ -338,8 +312,13 @@ fluxes_filtered |>
   geom_abline() +
   theme(legend.position = "bottom", legend.text = element_text(angle = 90)) +
   geom_smooth(method = lm, formula = 'y ~ x',
-              linetype = 2, color = "black", na.rm = TRUE) +
-  ggtitle(paste("Nonlinear R2s", qnt_string))
+              linetype = 2, color = "blue", na.rm = TRUE) +
+  ggtitle(paste("Nonlinear R2s", qnt_string)) +
+  xlab(expression(Linear~model_R^2)) +
+  ylab(expression(Nonlinear~model_R^2))
+
+ggsave("poster_figures/linear_nonlinear.png", width = 10, height = 6,
+       plot = last_plot() + ggtitle("", subtitle = ""))
 ```
 
 ::: {.callout-note title="Conclusion"}
@@ -394,7 +373,13 @@ fluxes_filtered |>
 ggplot(ff_inits, aes(gas_c0, lin_flux.estimate, color = lin_r.squared)) +
   geom_point(size = 0.5, alpha = 0.5) + 
   facet_wrap(~Gas, scales = "free") +
-  ggtitle(paste("Initial concentration versus linear flux", qnt_string))
+  ggtitle(paste("Initial concentration versus linear flux", qnt_string)) +
+  xlab("Initial concentration (ppb and ppm)") +
+  ylab(expression(Linear~model~flux~(nmol~and~µmol~m^-2~s^-1))) +
+  scale_color_continuous(expression(R^2))
+
+ggsave("poster_figures/c0_effect.png", width = 10, height = 6,
+       plot = last_plot() + ggtitle("", subtitle = ""))
 ```
 
 ::: {.callout-note title="Conclusion"}
@@ -584,7 +569,8 @@ dat_fluxes |>
 ggplot(dat_fluxes_reptest, aes(co2_F_o, co2_F_o_R1)) + 
   geom_point(na.rm = TRUE) + 
   geom_abline() + 
-  geom_smooth(method = lm, na.rm = TRUE, formula = y ~ x) + 
+  geom_smooth(method = lm, na.rm = TRUE, linetype = 2, 
+              color = "blue", formula = y ~ x) + 
   ggtitle("CO2 two-rep average versus first rep only")
 
 message("t-test (N = ", nrow(dat_fluxes_reptest), "):")
@@ -602,9 +588,15 @@ dat_fluxes_reptest |>
 ggplot(dat_fluxes_reptest, aes(ch4_F_o, ch4_F_o_R1)) + 
   geom_point(na.rm = TRUE) + 
   geom_abline() + 
-  geom_smooth(method = lm, na.rm = TRUE, formula = y ~ x) + 
+  geom_smooth(method = lm, na.rm = TRUE, formula = y ~ x,
+              linetype = 2, color = "blue") + 
   ggtitle("CH4 two-rep average versus first rep only") +
-  facet_grid(. ~ fluxsign, scales = "free", space = "free_x")
+  facet_grid(. ~ fluxsign, scales = "free", space = "free_x") +
+  xlab(expression(Mean~flux~from~two_repetitions~(nmol~m^-2~s^-1))) +
+  ylab(expression(Flux~from~first~repetition~(nmol~m^-2~s^-1)))
+
+ggsave("poster_figures/one_versus_two.png", width = 12, height = 8,
+       plot = last_plot() + ggtitle("", subtitle = ""))
 
 ch4_negative <- dat_fluxes_reptest |> filter(ch4_F_o < 0)
 message("t-test (negative fluxes, N = ", nrow(ch4_negative), "):")
