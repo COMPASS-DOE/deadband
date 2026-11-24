@@ -200,7 +200,7 @@ fluxes_all_obs |>
   geom_histogram(bins = 30) + 
   facet_wrap(~Gas) + 
   ggtitle("Overall lin_r.squared distribution, all data") +
-  xlab(expression(Linear~model_R^2))
+  xlab(expression(Linear~model~R^2))
 
 ggsave("poster_figures/lin_r2_distribution.png", width = 10, height = 6,
        plot = last_plot() + ggtitle("", subtitle = ""))
@@ -314,8 +314,8 @@ fluxes_filtered |>
   geom_smooth(method = lm, formula = 'y ~ x',
               linetype = 2, color = "blue", na.rm = TRUE) +
   ggtitle(paste("Nonlinear R2s", qnt_string)) +
-  xlab(expression(Linear~model_R^2)) +
-  ylab(expression(Nonlinear~model_R^2))
+  xlab(expression(Linear~model~R^2)) +
+  ylab(expression(Nonlinear~model~R^2))
 
 ggsave("poster_figures/linear_nonlinear.png", width = 10, height = 6,
        plot = last_plot() + ggtitle("", subtitle = ""))
@@ -457,7 +457,7 @@ db_results |>
   xlab("Dead band (s)") + 
   ylab(expression(Model~R^2))
 
-ggsave("poster_figures/deadband_effect.png", width = 12, height = 6,
+ggsave("poster_figures/deadband_effect.png", width = 12, height = 7,
        plot = last_plot() + ggtitle("", subtitle = ""))
 ```
 
@@ -521,7 +521,7 @@ ml_results |>
   xlab("Measurement length (s)") + 
   ylab(expression(Model~R^2))
 
-ggsave("poster_figures/ml_effect.png", width = 12, height = 6,
+ggsave("poster_figures/ml_effect.png", width = 12, height = 7,
        plot = last_plot() + ggtitle("", subtitle = ""))
 ```
 
@@ -592,10 +592,10 @@ ggplot(dat_fluxes_reptest, aes(ch4_F_o, ch4_F_o_R1)) +
               linetype = 2, color = "blue") + 
   ggtitle("CH4 two-rep average versus first rep only") +
   facet_grid(. ~ fluxsign, scales = "free", space = "free_x") +
-  xlab(expression(Mean~flux~from~two_repetitions~(nmol~m^-2~s^-1))) +
+  xlab(expression(Mean~flux~from~two~repetitions~(nmol~m^-2~s^-1))) +
   ylab(expression(Flux~from~first~repetition~(nmol~m^-2~s^-1)))
 
-ggsave("poster_figures/one_versus_two.png", width = 12, height = 8,
+ggsave("poster_figures/one_versus_two.png", width = 11, height = 8,
        plot = last_plot() + ggtitle("", subtitle = ""))
 
 ch4_negative <- dat_fluxes_reptest |> filter(ch4_F_o < 0)
